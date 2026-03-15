@@ -1,9 +1,9 @@
 import { ChatInterface } from "@/components/chat-interface";
 
-export default function Home() {
+export default function ChatPage() {
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <ChatInterface routeMode="landing" />
+      <ChatInterface chatId={null} routeMode="chat" />
     </main>
   );
 }

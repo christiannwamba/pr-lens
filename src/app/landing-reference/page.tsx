@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { ReviewComposer } from "@/components/review-composer";
 
-export default function DesignD() {
+export default function LandingReferencePage() {
   const [inputFocused, setInputFocused] = useState(false);
 
   return (
@@ -144,53 +145,16 @@ export default function DesignD() {
               position: "relative",
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                background: "#0a0a0a",
-                border: `1px solid ${inputFocused ? "#444" : "#222"}`,
-                borderRadius: 12,
-                padding: "4px 4px 4px 16px",
-                transition: "border-color 0.15s ease",
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style={{ flexShrink: 0 }}>
-                <path d="M7.775 3.275a1.15 1.15 0 0 1 1.625 0l3.325 3.325a1.15 1.15 0 0 1 0 1.625l-3.325 3.325a1.15 1.15 0 0 1-1.625 0L4.45 8.225a1.15 1.15 0 0 1 0-1.625L7.775 3.275Z" stroke="#555" strokeWidth="1.2" />
-              </svg>
-              <input
-                type="text"
-                placeholder="https://github.com/owner/repo/pull/123"
-                onFocus={() => setInputFocused(true)}
-                onBlur={() => setInputFocused(false)}
-                style={{
-                  flex: 1,
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  color: "#ededed",
-                  fontSize: 14,
-                  padding: "12px",
-                  fontFamily: "var(--font-ibm-plex-mono), monospace",
-                }}
-              />
-              <button
-                style={{
-                  background: "#ededed",
-                  color: "#000",
-                  border: "none",
-                  borderRadius: 8,
-                  padding: "10px 20px",
-                  fontSize: 14,
-                  fontWeight: 500,
-                  cursor: "pointer",
-                  flexShrink: 0,
-                  fontFamily: "inherit",
-                }}
-              >
-                Review
-              </button>
-            </div>
+            <ReviewComposer
+              focused={inputFocused}
+              onBlur={() => setInputFocused(false)}
+              onChange={() => {}}
+              onFocus={() => setInputFocused(true)}
+              onSubmit={() => {}}
+              placeholder="https://github.com/owner/repo/pull/123"
+              submitAriaLabel="Submit PR"
+              value=""
+            />
           </div>
 
           <p

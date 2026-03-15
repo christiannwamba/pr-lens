@@ -1,9 +1,9 @@
 "use client";
 
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
-import { DesignDComposer } from "@/components/design-d-composer";
+import { ReviewComposer } from "@/components/review-composer";
 
-type DesignDLandingProps = {
+type ReviewLandingPageProps = {
   inputFocused: boolean;
   text: string;
   onBlur: () => void;
@@ -57,14 +57,14 @@ const sampleFindings = [
   },
 ];
 
-export function DesignDLanding({
+export function ReviewLandingPage({
   inputFocused,
   text,
   onBlur,
   onChange,
   onFocus,
   onSubmit,
-}: DesignDLandingProps) {
+}: ReviewLandingPageProps) {
   return (
     <div
       style={{
@@ -191,7 +191,7 @@ export function DesignDLanding({
               width: "100%",
             }}
           >
-            <DesignDComposer
+            <ReviewComposer
               focused={inputFocused}
               onBlur={onBlur}
               onChange={onChange}

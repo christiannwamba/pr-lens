@@ -13,7 +13,7 @@ export default async function ChatThreadPage({
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <ChatInterface chatId={id} routeMode="chat" />
+      <ChatInterface chatId={id} screenMode="chat" />
     </main>
   );
 }

@@ -11,12 +11,12 @@ import {
 } from "@/components/ai-elements/prompt-input";
 import { cn } from "@/lib/utils";
 
-const designDSansFont =
+const appSansFont =
   "var(--font-ibm-plex-sans), -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
 
-const designDMonoFont = "var(--font-ibm-plex-mono), monospace";
+const appMonoFont = "var(--font-ibm-plex-mono), monospace";
 
-type DesignDComposerProps = {
+type ReviewComposerProps = {
   focused?: boolean;
   onBlur?: () => void;
   onChange: (value: string) => void;
@@ -29,7 +29,7 @@ type DesignDComposerProps = {
   value: string;
 };
 
-export function DesignDComposer({
+export function ReviewComposer({
   focused = false,
   onBlur,
   onChange,
@@ -40,7 +40,7 @@ export function DesignDComposer({
   status,
   submitAriaLabel,
   value,
-}: DesignDComposerProps) {
+}: ReviewComposerProps) {
   const waitingOnAssistant = status === "submitted" || status === "streaming";
 
   return (
@@ -71,7 +71,7 @@ export function DesignDComposer({
           onChange={(event) => onChange(event.target.value)}
           onFocus={onFocus}
           placeholder={placeholder}
-          style={{ fontFamily: designDMonoFont }}
+          style={{ fontFamily: appMonoFont }}
           value={value}
         />
         <PromptInputSubmit
@@ -80,7 +80,7 @@ export function DesignDComposer({
           onStop={onStop}
           size="icon-sm"
           status={status}
-          style={{ fontFamily: designDSansFont }}
+          style={{ fontFamily: appSansFont }}
         >
           {waitingOnAssistant ? null : (
             <ArrowUpIcon className="h-[22px] w-[22px]" strokeWidth={2.6} />

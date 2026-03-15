@@ -1,20 +1,21 @@
 "use client";
 
 import { useChat } from "@ai-sdk/react";
-import { UIMessage } from "ai";
+import { type UIDataTypes, type UIMessage, type UIMessagePart, type UITools } from "ai";
 import { Trash2Icon } from "lucide-react";
 import { motion } from "motion/react";
 import { nanoid } from "nanoid";
 import { useRouter } from "next/navigation";
 import {
   type ReactNode,
+  useCallback,
   startTransition,
   useEffect,
   useMemo,
   useRef,
-  useSyncExternalStore,
   useState,
 } from "react";
+import useLocalStorageState from "use-local-storage-state";
 
 import {
   Conversation,
@@ -28,39 +29,99 @@ import {
   MessageResponse,
 } from "@/components/ai-elements/message";
 import { type PromptInputMessage } from "@/components/ai-elements/prompt-input";
-import { DesignDComposer } from "@/components/design-d-composer";
-import { DesignDLanding } from "@/components/design-d-landing";
+import { ReviewComposer } from "@/components/review-composer";
+import { ReviewLandingPage } from "@/components/review-landing-page";
+import { ReviewCard } from "@/components/review-card";
+import { ToolProgress } from "@/components/tool-progress";
 import {
   clearPendingSubmission,
-  clearStoredThreads,
-  getStoredThreadsServerSnapshot,
+  DEFAULT_CHAT_TITLE,
   getChatTitle,
+  CHAT_THREADS_STORAGE_KEY,
+  safeParse,
+  type StoredChatThread,
+  parseStoredThreads,
   readPendingSubmission,
-  readStoredThreads,
   removeStoredThread,
-  subscribeStoredThreads,
+  safeSerialize,
+  serializeStoredThreads,
   upsertStoredThread,
   writePendingSubmission,
 } from "@/lib/chat-storage";
+import { type Review } from "@/lib/schemas/review";
 
 type ChatInterfaceProps = {
   chatId?: string | null;
-  routeMode: "chat" | "landing";
+  screenMode: "chat" | "landing";
 };
 
 const ROUTE_TRANSITION_MS = 220;
 
-function messageText(message: UIMessage) {
+function extractMessageText(message: UIMessage) {
   return message.parts
     .filter((part) => part.type === "text")
     .map((part) => part.text)
     .join("\n");
 }
 
-const designDSansFont =
+type ToolMessagePart = {
+  errorText?: string;
+  input?: unknown;
+  output?: unknown;
+  state: string;
+  type: `tool-${string}`;
+};
+
+function isToolMessagePart(part: UIMessagePart<UIDataTypes, UITools>) {
+  return part.type.startsWith("tool-");
+}
+
+function renderAssistantPart(part: UIMessagePart<UIDataTypes, UITools>, key: string) {
+  if (part.type === "text") {
+    return (
+      <MessageResponse className="text-sm leading-[1.7] text-[#ccc]" key={key}>
+        {part.text}
+      </MessageResponse>
+    );
+  }
+
+  if (part.type === "step-start") {
+    return (
+      <div
+        key={key}
+        style={{
+          borderTop: "1px solid #161616",
+          margin: "12px 0 4px",
+        }}
+      />
+    );
+  }
+
+  if (isToolMessagePart(part)) {
+    const toolPart = part as ToolMessagePart;
+    const toolName = toolPart.type.replace("tool-", "");
+
+    if (toolName === "generate_structured_review" && toolPart.state === "output-available") {
+      return <ReviewCard key={key} review={toolPart.output as Review} />;
+    }
+
+    return (
+      <ToolProgress
+        errorText={toolPart.state === "output-error" ? toolPart.errorText : undefined}
+        key={key}
+        state={toolPart.state}
+        toolName={toolName}
+      />
+    );
+  }
+
+  return null;
+}
+
+const appSansFont =
   "var(--font-ibm-plex-sans), -apple-system, BlinkMacSystemFont, system-ui, sans-serif";
 
-const designDMonoFont = "var(--font-ibm-plex-mono), monospace";
+const appMonoFont = "var(--font-ibm-plex-mono), monospace";
 const smoothEase = [0.22, 1, 0.36, 1] as const;
 const exitEase = [0.4, 0, 1, 1] as const;
 
@@ -83,7 +144,7 @@ function consumeFromLandingRouteFlag() {
   return didRouteFromLanding;
 }
 
-const pageTransition = {
+const screenTransitionVariants = {
   animate: {
     filter: "blur(0px)",
     opacity: 1,
@@ -109,7 +170,7 @@ const pageTransition = {
   },
 };
 
-const chatSectionTransition = {
+const contentTransitionVariants = {
   animate: (delay = 0) => ({
     opacity: 1,
     transition: {
@@ -125,11 +186,11 @@ const chatSectionTransition = {
   },
 };
 
-type DesignDNavigationProps = {
+type AppNavigationProps = {
   action?: ReactNode;
 };
 
-function DesignDNavigation({ action }: DesignDNavigationProps) {
+function AppNavigation({ action }: AppNavigationProps) {
   return (
     <nav
       style={{
@@ -153,7 +214,7 @@ function DesignDNavigation({ action }: DesignDNavigationProps) {
         <span
           style={{
             color: "#ededed",
-            fontFamily: designDSansFont,
+            fontFamily: appSansFont,
             fontSize: 14,
             fontWeight: 500,
             letterSpacing: "-0.01em",
@@ -168,7 +229,7 @@ function DesignDNavigation({ action }: DesignDNavigationProps) {
   );
 }
 
-function SidebarButton({
+function SidebarActionButton({
   intent = "default",
   label,
   onClick,
@@ -189,7 +250,7 @@ function SidebarButton({
         color: isDanger ? "#fca5a5" : "#888",
         cursor: "pointer",
         display: "block",
-        fontFamily: designDSansFont,
+        fontFamily: appSansFont,
         fontSize: 13,
         fontWeight: isDanger ? 500 : 400,
         padding: isDanger ? "10px 14px" : "10px 14px",
@@ -204,7 +265,7 @@ function SidebarButton({
   );
 }
 
-function ChatThreadButton({
+function ConversationListItem({
   onDelete,
   isActive,
   onClick,
@@ -235,6 +296,7 @@ function ChatThreadButton({
     >
       <button
         onClick={onClick}
+        title={title}
         style={{
           background: "transparent",
           border: 0,
@@ -253,7 +315,10 @@ function ChatThreadButton({
             fontWeight: 500,
             lineHeight: 1.4,
             marginBottom: 4,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
             transition: "color 160ms ease",
+            whiteSpace: "nowrap",
           }}
         >
           {title}
@@ -261,7 +326,7 @@ function ChatThreadButton({
         <div
           style={{
             color: hovered || isActive ? "#666" : "#555",
-            fontFamily: designDMonoFont,
+            fontFamily: appMonoFont,
             fontSize: 11,
             transition: "color 160ms ease",
           }}
@@ -305,32 +370,82 @@ function formatTimestamp(timestamp: number) {
   }).format(timestamp);
 }
 
-export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) {
+export function ChatInterface({ chatId = null, screenMode }: ChatInterfaceProps) {
   const router = useRouter();
+  const [threads, setThreads, { removeItem: clearThreadStorage }] =
+    useLocalStorageState<StoredChatThread[]>(CHAT_THREADS_STORAGE_KEY, {
+      defaultServerValue: [],
+      defaultValue: [],
+      serializer: {
+        parse: (value) => parseStoredThreads(value),
+        stringify: (value) => serializeStoredThreads(value as StoredChatThread[]),
+      },
+    });
   const [text, setText] = useState("");
   const [landingFocused, setLandingFocused] = useState(false);
   const [chatFocused, setChatFocused] = useState(false);
   const [isRoutingToChat, setIsRoutingToChat] = useState(false);
   const routeTransitionTimerRef = useRef<number | null>(null);
   const [hydratedRouteKey, setHydratedRouteKey] = useState<string | null>(
-    routeMode === "chat" ? null : chatId ?? "__chat_home__"
+    screenMode === "chat" ? null : chatId ?? "__chat_home__"
   );
   const [didRouteFromLanding] = useState(
-    () => routeMode === "chat" && consumeFromLandingRouteFlag()
+    () => screenMode === "chat" && consumeFromLandingRouteFlag()
   );
   const [chatShellAnimationComplete, setChatShellAnimationComplete] = useState(
     () => !didRouteFromLanding
   );
 
-  const { error, messages, sendMessage, setMessages, status, stop } = useChat({
-    experimental_throttle: 50,
-  });
-  const threads = useSyncExternalStore(
-    subscribeStoredThreads,
-    readStoredThreads,
-    getStoredThreadsServerSnapshot
+  const persistThread = useCallback(
+    (nextMessages: UIMessage[], options?: { finalizeTitle?: boolean }) => {
+      if (screenMode !== "chat" || !chatId || nextMessages.length === 0) {
+        return;
+      }
+
+      const serializedNextMessages = safeSerialize(nextMessages);
+      if (!serializedNextMessages) {
+        return;
+      }
+
+      const serializableMessages = safeParse<UIMessage[]>(serializedNextMessages, []);
+      const timestamp = Date.now();
+
+      setThreads((currentThreads) => {
+        const storedThread = currentThreads.find((thread) => thread.id === chatId);
+        const serializedStoredMessages = storedThread
+          ? safeSerialize(storedThread.messages)
+          : null;
+
+        if (serializedStoredMessages === serializedNextMessages) {
+          return currentThreads;
+        }
+
+        const nextTitle =
+          storedThread?.title && storedThread.title !== DEFAULT_CHAT_TITLE
+            ? storedThread.title
+            : options?.finalizeTitle
+              ? getChatTitle(nextMessages)
+              : DEFAULT_CHAT_TITLE;
+
+        return upsertStoredThread(currentThreads, {
+          createdAt: storedThread?.createdAt ?? timestamp,
+          id: chatId,
+          messages: serializableMessages,
+          title: nextTitle,
+          updatedAt: timestamp,
+        });
+      });
+    },
+    [chatId, screenMode, setThreads]
   );
 
+  const { error, messages, sendMessage, setMessages, status, stop } = useChat({
+    experimental_throttle: 50,
+    id: chatId ?? "chat-home",
+    onFinish: ({ messages: finishedMessages }) => {
+      persistThread(finishedMessages, { finalizeTitle: true });
+    },
+  });
   const hasMessages = messages.length > 0;
   const waitingOnAssistant = status === "submitted" || status === "streaming";
   const latestUserText = useMemo(() => {
@@ -338,12 +453,13 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
       .reverse()
       .find((message) => message.role === "user");
 
-    return latestUserMessage ? messageText(latestUserMessage) : "";
+    return latestUserMessage ? extractMessageText(latestUserMessage) : "";
   }, [messages]);
-  const chatViewKey = chatId ?? "chat-home";
+  const activeConversationKey = chatId ?? "chat-home";
+  const serializedMessages = safeSerialize(messages);
   const shouldAnimateFullChatShell =
-    routeMode === "chat" && didRouteFromLanding && !chatShellAnimationComplete;
-  const shouldAnimateChatContent = routeMode === "chat" && !shouldAnimateFullChatShell;
+    screenMode === "chat" && didRouteFromLanding && !chatShellAnimationComplete;
+  const shouldAnimateChatContent = screenMode === "chat" && !shouldAnimateFullChatShell;
 
   useEffect(() => {
     return () => {
@@ -354,12 +470,10 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
   }, []);
 
   useEffect(() => {
-    if (routeMode !== "chat") return;
+    if (screenMode !== "chat") return;
 
     const routeKey = chatId ?? "__chat_home__";
     if (hydratedRouteKey === routeKey) return;
-
-    const storedThreads = readStoredThreads();
 
     const pendingSubmission = readPendingSubmission();
 
@@ -371,40 +485,28 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
     }
 
     const currentThread = chatId
-      ? storedThreads.find((thread) => thread.id === chatId)
+      ? threads.find((thread) => thread.id === chatId)
       : null;
 
     setMessages(currentThread?.messages ?? []);
     queueMicrotask(() => {
       setHydratedRouteKey(routeKey);
     });
-  }, [chatId, hydratedRouteKey, routeMode, sendMessage, setMessages]);
+  }, [chatId, hydratedRouteKey, screenMode, sendMessage, setMessages, threads]);
 
   useEffect(() => {
-    if (routeMode !== "chat") return;
+    if (screenMode !== "chat") return;
 
     if (!chatId) {
       return;
     }
 
-    if (messages.length === 0) {
+    if (messages.length === 0 || !serializedMessages) {
       return;
     }
 
-    const storedThread = readStoredThreads().find((thread) => thread.id === chatId);
-    if (storedThread && JSON.stringify(storedThread.messages) === JSON.stringify(messages)) {
-      return;
-    }
-
-    const timestamp = Date.now();
-    upsertStoredThread({
-      createdAt: storedThread?.createdAt ?? timestamp,
-      id: chatId,
-      messages,
-      title: getChatTitle(messages),
-      updatedAt: timestamp,
-    });
-  }, [chatId, messages, routeMode]);
+    persistThread(messages, { finalizeTitle: status === "ready" });
+  }, [chatId, messages, persistThread, screenMode, serializedMessages, status]);
 
   const createChatRoute = (nextChatId: string) => `/chat/${nextChatId}`;
 
@@ -412,7 +514,7 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
     const nextValue = message.text.trim();
     if (!nextValue) return;
 
-    if (routeMode === "landing") {
+    if (screenMode === "landing") {
       const nextChatId = nanoid(10);
       writePendingSubmission({ chatId: nextChatId, text: nextValue });
       setFromLandingRouteFlag(true);
@@ -453,7 +555,8 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
       clearPendingSubmission();
     }
 
-    const nextThreads = removeStoredThread(targetChatId);
+    const nextThreads = removeStoredThread(threads, targetChatId);
+    setThreads(nextThreads);
     if (targetChatId !== chatId) {
       return;
     }
@@ -467,17 +570,21 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
     setText("");
     setMessages([]);
     clearPendingSubmission();
-    clearStoredThreads();
+    clearThreadStorage();
     router.push("/");
   };
 
-  if (routeMode === "landing") {
+  if (screenMode === "landing") {
     return (
       <motion.div
-        animate={isRoutingToChat ? pageTransition.routing : pageTransition.animate}
-        initial={pageTransition.initial}
+        animate={
+          isRoutingToChat
+            ? screenTransitionVariants.routing
+            : screenTransitionVariants.animate
+        }
+        initial={screenTransitionVariants.initial}
       >
-        <DesignDLanding
+        <ReviewLandingPage
           inputFocused={landingFocused}
           onBlur={() => setLandingFocused(false)}
           onChange={setText}
@@ -494,7 +601,7 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
       style={{
         background: "#000",
         color: "#ededed",
-        fontFamily: designDSansFont,
+        fontFamily: appSansFont,
         minHeight: "100vh",
         WebkitFontSmoothing: "antialiased",
       }}
@@ -510,7 +617,7 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
         }}
       />
 
-      <DesignDNavigation />
+      <AppNavigation />
 
       <main
         style={{
@@ -554,12 +661,12 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
                   gap: 12,
                 }}
               >
-                <SidebarButton label="New chat" onClick={handleNewChat} />
+                <SidebarActionButton label="New chat" onClick={handleNewChat} />
 
                 <div
                   style={{
                     color: "#444",
-                    fontFamily: designDMonoFont,
+                    fontFamily: appMonoFont,
                     fontSize: 11,
                     letterSpacing: "0.08em",
                     padding: "12px 2px 4px",
@@ -586,7 +693,7 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
                       const isActive = thread.id === chatId;
 
                       return (
-                        <ChatThreadButton
+                        <ConversationListItem
                           key={thread.id}
                           isActive={isActive}
                           onClick={() => router.push(createChatRoute(thread.id))}
@@ -615,11 +722,11 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
             <motion.div
               animate={
                 shouldAnimateChatContent
-                  ? chatSectionTransition.animate(0.12)
+                  ? contentTransitionVariants.animate(0.12)
                   : undefined
               }
-              initial={shouldAnimateChatContent ? chatSectionTransition.initial : false}
-              key={`content-${chatViewKey}`}
+              initial={shouldAnimateChatContent ? contentTransitionVariants.initial : false}
+              key={`content-${activeConversationKey}`}
               style={{ display: "flex", flex: 1, flexDirection: "column", minHeight: 0 }}
             >
               {latestUserText ? (
@@ -656,7 +763,7 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
                       border: "1px solid #1a1a1a",
                       borderRadius: 12,
                       color: "#888",
-                      fontFamily: designDMonoFont,
+                      fontFamily: appMonoFont,
                       fontSize: 14,
                       padding: "14px 18px",
                     }}
@@ -700,14 +807,7 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
                         </div>
                         <MessageContent className="max-w-full rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] px-6 py-5 text-sm leading-[1.7] text-[#ccc]">
                           {message.parts.map((part, index) =>
-                            part.type === "text" ? (
-                              <MessageResponse
-                                className="text-sm leading-[1.7] text-[#ccc]"
-                                key={`${message.id}-${index}`}
-                              >
-                                {part.text}
-                              </MessageResponse>
-                            ) : null
+                            renderAssistantPart(part, `${message.id}-${index}`)
                           )}
                         </MessageContent>
                       </Message>
@@ -802,14 +902,14 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
               width: "100%",
             }}
           >
-            <SidebarButton
+            <SidebarActionButton
               intent="danger"
               label="Clear history"
               onClick={handleResetAllChats}
             />
           </div>
           <div style={{ pointerEvents: "auto", width: "100%" }}>
-            <DesignDComposer
+            <ReviewComposer
               focused={chatFocused}
               onBlur={() => setChatFocused(false)}
               onChange={setText}
@@ -829,8 +929,8 @@ export function ChatInterface({ chatId = null, routeMode }: ChatInterfaceProps) 
   if (shouldAnimateFullChatShell) {
     return (
       <motion.div
-        animate={pageTransition.animate}
-        initial={pageTransition.initial}
+        animate={screenTransitionVariants.animate}
+        initial={screenTransitionVariants.initial}
         onAnimationComplete={() => {
           setChatShellAnimationComplete(true);
         }}

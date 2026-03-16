@@ -32,5 +32,47 @@ export const ReviewSchema = z.object({
   verdict: z.enum(["approve", "request-changes", "needs-discussion"]),
 });
 
+export const ReviewGenerationSchema = ReviewSchema.omit({
+  followUpSuggestions: true,
+}).extend({
+  // Anthropic's structured output schema support is stricter than plain JSON
+  // Schema support and rejects array minItems > 1. We generate with a looser
+  // schema, then normalize and validate against the stricter app contract.
+  followUpSuggestions: z.array(z.string()),
+});
+
 export type Finding = z.infer<typeof FindingSchema>;
 export type Review = z.infer<typeof ReviewSchema>;
+export type ReviewGeneration = z.infer<typeof ReviewGenerationSchema>;
+
+const DEFAULT_FOLLOW_UP_SUGGESTIONS = [
+  "Explain the highest-risk finding",
+  "How would you fix this PR?",
+  "Is this PR safe to merge?",
+  "Show me the security findings",
+] as const;
+
+export function normalizeReviewOutput(review: ReviewGeneration): Review {
+  const followUpSuggestions = Array.from(
+    new Set(
+      review.followUpSuggestions
+        .map((suggestion) => suggestion.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 4);
+
+  for (const fallback of DEFAULT_FOLLOW_UP_SUGGESTIONS) {
+    if (followUpSuggestions.length >= 2) {
+      break;
+    }
+
+    if (!followUpSuggestions.includes(fallback)) {
+      followUpSuggestions.push(fallback);
+    }
+  }
+
+  return ReviewSchema.parse({
+    ...review,
+    followUpSuggestions,
+  });
+}

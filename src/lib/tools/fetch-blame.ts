@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 
-import { githubGraphQL, githubFetch } from "@/lib/github";
+import { GitHubApiError, githubGraphQL, githubFetch } from "@/lib/github";
 
 type GraphQLBlameResponse = {
   repository: {
@@ -101,22 +101,37 @@ export const fetchBlame = tool({
         source: "graphql" as const,
       };
     } catch {
-      const response = await githubFetch(
-        `/repos/${owner}/${repo}/commits?path=${encodeRepoPath(path)}&sha=${encodeURIComponent(branch)}&per_page=10`,
-      );
-      const commits = (await response.json()) as CommitHistoryResponse;
+      try {
+        const response = await githubFetch(
+          `/repos/${owner}/${repo}/commits?path=${encodeRepoPath(path)}&sha=${encodeURIComponent(branch)}&per_page=10`,
+        );
+        const commits = (await response.json()) as CommitHistoryResponse;
 
-      return {
-        branch,
-        path,
-        recentCommits: commits.map((commit) => ({
-          author: commit.commit.author.name,
-          date: commit.commit.author.date,
-          message: commit.commit.message.split("\n")[0],
-          sha: commit.sha.slice(0, 7),
-        })),
-        source: "rest-fallback" as const,
-      };
+        return {
+          branch,
+          path,
+          recentCommits: commits.map((commit) => ({
+            author: commit.commit.author.name,
+            date: commit.commit.author.date,
+            message: commit.commit.message.split("\n")[0],
+            sha: commit.sha.slice(0, 7),
+          })),
+          source: "rest-fallback" as const,
+        };
+      } catch (error) {
+        return {
+          branch,
+          error:
+            error instanceof GitHubApiError
+              ? `GitHub API error: ${error.status} for ${error.path}`
+              : error instanceof Error
+                ? error.message
+                : "Unable to fetch blame or recent commit history.",
+          path,
+          recentCommits: [],
+          source: "unavailable" as const,
+        };
+      }
     }
   },
 });

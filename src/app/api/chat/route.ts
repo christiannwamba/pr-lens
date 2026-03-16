@@ -15,10 +15,6 @@ import {
   selectStepState,
 } from "@/lib/agent";
 
-// Vercel serverless function timeout — 60s accommodates multi-step agent loops
-// where each step makes a GitHub API call + model inference round trip.
-export const maxDuration = 60;
-
 export async function POST(request: Request) {
   const { messages }: { messages: UIMessage[] } = await request.json();
   const tools = buildTools();

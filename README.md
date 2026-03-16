@@ -2,7 +2,7 @@
 
 Paste a GitHub PR URL, get a code review back. Built with Next.js, the Vercel AI SDK, and Anthropic Claude.
 
-## The Problem
+## Why?
 
 Code review matters more than most engineering activities, but it's wildly inconsistent. Reviews shift with reviewer energy, familiarity with the codebase, and how much time pressure they're under. Security gaps slip through. Subtle bugs survive. Convention drift accumulates quietly.
 

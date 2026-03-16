@@ -23,9 +23,17 @@ export function Loader({
         <span className="absolute inset-0 animate-ping rounded-full bg-primary/80" />
         <span className="relative rounded-full bg-primary size-2.5" />
       </span>
-      <Shimmer className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+      <span
+        className="relative inline-block bg-[length:250%_100%,auto] bg-clip-text text-transparent text-xs uppercase tracking-[0.3em]"
+        style={{
+          backgroundImage:
+            "linear-gradient(90deg, #0000 calc(50% - 24px), #ededed, #0000 calc(50% + 24px)), linear-gradient(#888, #888)",
+          backgroundRepeat: "no-repeat, padding-box",
+          animation: "shimmer-slide 2s linear infinite",
+        }}
+      >
         {label}
-      </Shimmer>
+      </span>
     </div>
   );
 }

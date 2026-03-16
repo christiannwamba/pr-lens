@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+@source "../../node_modules/streamdown/dist";
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -104,5 +106,14 @@
   ::selection {
     background: oklch(0.94 0 0 / 15%);
     color: oklch(1 0 0);
+  }
+}
+
+@keyframes shimmer-slide {
+  from {
+    background-position: 100% center;
+  }
+  to {
+    background-position: 0% center;
   }
 }

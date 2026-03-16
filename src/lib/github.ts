@@ -14,6 +14,16 @@ type GithubGraphQLResponse<T> = {
   errors?: GithubGraphQLError[];
 };
 
+function getRequiredGitHubToken() {
+  const token = process.env.GITHUB_TOKEN;
+
+  if (typeof token !== "string" || token.trim() === "") {
+    throw new Error("GITHUB_TOKEN is required for all GitHub API requests.");
+  }
+
+  return token;
+}
+
 export class GitHubApiError extends Error {
   readonly bodyText: string;
   readonly path: string;
@@ -38,23 +48,16 @@ export class GitHubApiError extends Error {
   }
 }
 
-function createGitHubHeaders(accept?: string, includeAuth = true) {
-  const token = includeAuth ? process.env.GITHUB_TOKEN : undefined;
+function createGitHubHeaders(accept?: string) {
+  const token = getRequiredGitHubToken();
   const headers: Record<string, string> = {
     Accept: accept ?? "application/vnd.github+json",
+    Authorization: `Bearer ${token}`,
     "User-Agent": "pr-lens",
     "X-GitHub-Api-Version": "2022-11-28",
   };
 
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-
   return headers;
-}
-
-function shouldRetryWithoutAuth(response: Response, bodyText: string) {
-  return response.status === 401 && /bad credentials/i.test(bodyText);
 }
 
 async function buildGitHubError(path: string, response: Response) {
@@ -63,7 +66,7 @@ async function buildGitHubError(path: string, response: Response) {
   if (response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0") {
     return new GitHubApiError({
       bodyText,
-      message: "GitHub API rate limit exceeded. Set GITHUB_TOKEN for higher limits.",
+      message: "GitHub API rate limit exceeded for the configured GITHUB_TOKEN.",
       path,
       status: response.status,
     });
@@ -83,36 +86,15 @@ export async function githubFetch(
   path: string,
   options?: GithubFetchOptions,
 ): Promise<Response> {
+  getRequiredGitHubToken();
+
   const response = await fetch(`${GITHUB_API}${path}`, {
+    // no-store: PRs are mutable (new commits, updated descriptions) so caching
+    // would risk reviewing stale data. For immutable refs like commit SHAs,
+    // caching could be added later via Vercel KV or Data Cache.
     cache: "no-store",
     headers: createGitHubHeaders(options?.accept),
   });
-
-  if (process.env.GITHUB_TOKEN && response.status === 401) {
-    const bodyText = await response.text();
-
-    if (shouldRetryWithoutAuth(response, bodyText)) {
-      const fallbackResponse = await fetch(`${GITHUB_API}${path}`, {
-        cache: "no-store",
-        headers: createGitHubHeaders(options?.accept, false),
-      });
-
-      if (!fallbackResponse.ok) {
-        throw await buildGitHubError(path, fallbackResponse);
-      }
-
-      return fallbackResponse;
-    }
-
-    throw new GitHubApiError({
-      bodyText,
-      message: `GitHub API error: ${response.status} ${response.statusText} for ${path}${
-        bodyText ? ` - ${bodyText}` : ""
-      }`,
-      path,
-      status: response.status,
-    });
-  }
 
   if (!response.ok) {
     throw await buildGitHubError(path, response);
@@ -125,11 +107,7 @@ export async function githubGraphQL<T>(
   query: string,
   variables: Record<string, unknown>,
 ): Promise<T> {
-  const token = process.env.GITHUB_TOKEN;
-
-  if (!token) {
-    throw new Error("GITHUB_TOKEN required for GraphQL API requests.");
-  }
+  getRequiredGitHubToken();
 
   const response = await fetch(GITHUB_GRAPHQL, {
     body: JSON.stringify({ query, variables }),

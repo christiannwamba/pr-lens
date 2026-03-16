@@ -33,7 +33,13 @@ const VERDICT_LABELS: Record<Review["verdict"], string> = {
   "request-changes": "Request changes",
 };
 
-export function ReviewCard({ review }: { review: Review }) {
+export function ReviewCard({
+  prUrl,
+  review,
+}: {
+  prUrl?: string | null;
+  review: Review;
+}) {
   const riskTone = RISK_TONES[review.riskLevel];
 
   return (
@@ -107,15 +113,34 @@ export function ReviewCard({ review }: { review: Review }) {
           >
             {review.riskLevel} risk
           </span>
-          <span
-            style={{
-              color: "#d4d4d4",
-              fontSize: 13,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            {VERDICT_LABELS[review.verdict]}
-          </span>
+          {prUrl ? (
+            <a
+              href={prUrl}
+              rel="noopener noreferrer"
+              style={{
+                color: "#d4d4d4",
+                fontSize: 13,
+                letterSpacing: "-0.01em",
+                textDecoration: "none",
+                transition: "color 160ms ease",
+              }}
+              target="_blank"
+              onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "#d4d4d4"; }}
+            >
+              View
+            </a>
+          ) : (
+            <span
+              style={{
+                color: "#d4d4d4",
+                fontSize: 13,
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {VERDICT_LABELS[review.verdict]}
+            </span>
+          )}
         </div>
       </div>
 
@@ -196,6 +221,7 @@ export function ReviewCard({ review }: { review: Review }) {
             </div>
           </div>
         ) : null}
+
       </div>
     </section>
   );

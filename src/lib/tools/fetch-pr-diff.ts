@@ -29,6 +29,10 @@ type PullRequestFileResponse = {
   status: string;
 };
 
+// Truncate individual file patches to 500 lines to keep total context within
+// the model's budget. Large diffs (e.g., generated files, lock files) would
+// otherwise dominate the context window and crowd out meaningful code.
+// The model can use fetch_file_content to inspect specific files in full if needed.
 const MAX_PATCH_LINES = 500;
 
 export const fetchPRDiff = tool({

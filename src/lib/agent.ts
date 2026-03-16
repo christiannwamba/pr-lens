@@ -50,6 +50,12 @@ function getLatestToolResult<TOOLS extends ToolSet, Output>(
   return undefined;
 }
 
+/**
+ * Determines which tools the model can call on the next step by inspecting
+ * prior step results. Only the tools mapped to the active skill are enabled —
+ * this keeps the tool schema surface small so the model doesn't waste tokens
+ * on irrelevant tool descriptions or hallucinate calls to tools it shouldn't use.
+ */
 export function selectStepState<TOOLS extends ToolSet>(steps: Array<StepResult<TOOLS>>) {
   const latestSkill = getLatestToolResult(steps, "load_skill", loadSkillResultSchema);
   const latestSearch = getLatestToolResult(steps, "search_tools", searchToolsResultSchema);
@@ -74,8 +80,9 @@ export function buildBaseSystemPrompt() {
 
 For tool-based work:
 - Call load_skill first to choose the correct mode for the task.
-- Then call search_tools to activate the relevant tools for that skill.
+- Then call search_tools with that same skillName to activate the relevant tools for that skill.
 - You may repeat those meta-tools later if the conversation changes direction.
+- If the user is asking a general follow-up that can be answered from the existing review, prior tool outputs, or message history, answer directly without loading a skill.
 
 Available skills:
 ${skillList}
@@ -86,6 +93,8 @@ Behavior:
 - When the user asks how to fix something, load suggest-fix.
 - When the user asks about file or commit history, load explore-history.
 - When the user asks whether a change follows codebase conventions, load compare-patterns.
+- After a review is complete, use the previous review card, tool outputs, and conversation history as follow-up context.
+- Questions like "Is this PR safe to merge?" should usually be answered conversationally from the existing review unless the user asks you to investigate further.
 - Be direct, specific, and grounded in the repository context.
 - Cite file paths and line ranges when the available context supports them.`;
 }
@@ -105,14 +114,9 @@ Current skill: ${skill.name}
 ${skill.instructions}`;
 }
 
-function searchToolCatalog(input: { query?: string; skillName?: SkillName }) {
+function searchToolCatalog(skillName: SkillName) {
   const skillToolMap = getSkillToolMap();
-
-  if (input.skillName && input.skillName in skillToolMap) {
-    return { tools: skillToolMap[input.skillName] as FunctionalToolName[] };
-  }
-
-  return { tools: [...FUNCTIONAL_TOOL_NAMES] };
+  return { tools: skillToolMap[skillName] as FunctionalToolName[] };
 }
 
 export function buildTools() {
@@ -131,10 +135,9 @@ export function buildTools() {
     search_tools: tool({
       description: "Search and activate the tools needed for the current skill.",
       inputSchema: z.object({
-        query: z.string().optional(),
-        skillName: z.enum(Object.keys(getSkillToolMap()) as [SkillName, ...SkillName[]]).optional(),
+        skillName: z.enum(Object.keys(getSkillToolMap()) as [SkillName, ...SkillName[]]),
       }),
-      execute: (input) => searchToolCatalog(input),
+      execute: ({ skillName }) => searchToolCatalog(skillName),
     }),
     fetch_pr_diff: fetchPRDiff,
     fetch_file_content: fetchFileContent,
@@ -145,6 +148,12 @@ export function buildTools() {
   } as const;
 }
 
+/**
+ * Strips meta-tool calls (load_skill, search_tools) from earlier messages before
+ * sending to the model. These orchestration calls are only useful at the moment
+ * they run — keeping them in history wastes context tokens and can confuse the
+ * model into re-calling them unnecessarily.
+ */
 export function pruneOrchestrationMessages(messages: Parameters<typeof pruneMessages>[0]["messages"]) {
   return pruneMessages({
     emptyMessages: "remove",

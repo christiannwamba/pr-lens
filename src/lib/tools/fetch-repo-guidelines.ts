@@ -9,6 +9,10 @@ type RepositoryFileResponse = {
   type: string;
 };
 
+// Convention files fetched in parallel via Promise.allSettled — missing files
+// (404) are silently skipped since most repos only have a subset of these.
+// Each file is truncated to 3,000 chars to avoid blowing the context budget
+// on verbose READMEs while still capturing meaningful style/config signals.
 const GUIDELINE_FILES = [
   "README.md",
   "CONTRIBUTING.md",

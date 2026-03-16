@@ -49,7 +49,8 @@ export function ReviewComposer({
         "[&>input[type=file]]:hidden [&>[data-slot=input-group]]:h-auto [&>[data-slot=input-group]]:rounded-[999px] [&>[data-slot=input-group]]:border [&>[data-slot=input-group]]:border-[#222] [&>[data-slot=input-group]]:bg-[#0a0a0a] [&>[data-slot=input-group]]:pl-[16px] [&>[data-slot=input-group]]:pr-[6px] [&>[data-slot=input-group]]:py-[6px] [&>[data-slot=input-group]]:shadow-none [&>[data-slot=input-group]]:ring-0 [&>[data-slot=input-group]]:transition-colors [&>[data-slot=input-group]]:focus-within:ring-0",
         focused ? "[&>[data-slot=input-group]]:border-[#444]" : ""
       )}
-      onSubmit={onSubmit}
+      maxFiles={0}
+      onSubmit={(message) => onSubmit({ ...message, files: [] })}
     >
       <div className="flex w-full items-center gap-3 px-1">
         <svg

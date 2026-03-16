@@ -19,6 +19,13 @@ export const FindingSchema = z.object({
 
 export const ReviewSchema = z.object({
   findings: z.array(FindingSchema).describe("Specific findings ordered by severity."),
+  followUpSuggestions: z
+    .array(z.string())
+    .min(2)
+    .max(4)
+    .describe(
+      "Short follow-up prompts the user can click to explore the review further. Examples: 'Explain the retry loop issue', 'How do I fix the auth gap?', 'Is this PR safe to merge?', 'Show me the security findings'."
+    ),
   praise: z.array(z.string()).describe("Notable things the pull request does well."),
   riskLevel: z.enum(["low", "medium", "high", "critical"]),
   summary: z.string().describe("Two to three sentence overview of the pull request review."),

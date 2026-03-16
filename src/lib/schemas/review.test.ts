@@ -17,6 +17,10 @@ describe("ReviewSchema", () => {
             title: "SQL injection in login query",
           },
         ],
+        followUpSuggestions: [
+          "Explain the security finding",
+          "Show me the highest-risk area",
+        ],
         praise: ["Good test coverage on the happy path."],
         riskLevel: "high",
         summary: "This PR adds authentication but introduces a serious security issue.",

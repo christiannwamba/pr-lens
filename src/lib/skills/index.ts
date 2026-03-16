@@ -3,6 +3,10 @@ import { join } from "node:path";
 
 const SKILLS_DIR = join(process.cwd(), "src", "lib", "skills");
 
+// Each skill exposes only the tools it needs. This is intentional — giving the
+// model access to all tools regardless of task leads to unnecessary calls
+// (e.g., fetching blame when the user just wants a fix suggestion) which adds
+// latency and cost without improving output quality.
 export const SKILL_TOOL_MAP = {
   "compare-patterns": ["fetch_repo_guidelines", "fetch_file_content"],
   "explain-finding": ["fetch_pr_diff", "fetch_file_content", "fetch_blame"],

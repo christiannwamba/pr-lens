@@ -1,5 +1,16 @@
 "use client";
 
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockCopyButton,
+  CodeBlockHeader,
+} from "@/components/ai-elements/code-block";
+import { Button } from "@/components/ui/button";
+import { DownloadIcon } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useCallback, useRef, useState } from "react";
+
 const TOOL_LABELS: Record<string, string> = {
   fetch_blame: "Analyzing git history",
   fetch_file_content: "Reading file context",
@@ -13,81 +24,184 @@ const TOOL_LABELS: Record<string, string> = {
 
 type ToolProgressProps = {
   errorText?: string;
+  input?: unknown;
+  output?: unknown;
   state: string;
   toolName: string;
 };
 
-function getStatusTone(state: string) {
+function getStatusIndicator(state: string) {
   if (state === "output-error") {
-    return {
-      background: "rgba(127, 29, 29, 0.26)",
-      border: "rgba(248, 113, 113, 0.38)",
-      glyph: "x",
-      glyphColor: "#fca5a5",
-      text: "#fecaca",
-    };
+    return { color: "#f87171", symbol: "✕" };
   }
-
   if (state === "output-available") {
-    return {
-      background: "rgba(21, 128, 61, 0.2)",
-      border: "rgba(74, 222, 128, 0.28)",
-      glyph: "done",
-      glyphColor: "#86efac",
-      text: "#dcfce7",
-    };
+    return { color: "#4ade80", symbol: "●" };
   }
-
-  return {
-    background: "rgba(255,255,255,0.04)",
-    border: "rgba(255,255,255,0.08)",
-    glyph: "live",
-    glyphColor: "#888",
-    text: "#b3b3b3",
-  };
+  return { color: "#555", symbol: "◌" };
 }
 
-export function ToolProgress({ errorText, state, toolName }: ToolProgressProps) {
-  const label = TOOL_LABELS[toolName] ?? toolName.replaceAll("_", " ");
-  const tone = getStatusTone(state);
-  const suffix = state === "output-available" ? "" : state === "output-error" ? " failed" : "...";
+function formatJson(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
+}
+
+function ToolCodeBlock({ code, label }: { code: string; label: string }) {
+  const handleDownload = useCallback(() => {
+    const blob = new Blob([code], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${label.toLowerCase().replaceAll(" ", "-")}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [code, label]);
 
   return (
-    <div
-      style={{
-        background: tone.background,
-        border: `1px solid ${tone.border}`,
-        borderRadius: 999,
-        color: tone.text,
-        display: "inline-flex",
-        flexDirection: "column",
-        gap: 6,
-        marginTop: 10,
-        maxWidth: "100%",
-        padding: "10px 14px",
-      }}
+    <CodeBlock code={code} language="json">
+      <CodeBlockHeader>
+        <span className="font-mono text-xs text-muted-foreground">json</span>
+        <CodeBlockActions>
+          <Button onClick={handleDownload} size="icon" variant="ghost">
+            <DownloadIcon size={14} />
+          </Button>
+          <CodeBlockCopyButton />
+        </CodeBlockActions>
+      </CodeBlockHeader>
+    </CodeBlock>
+  );
+}
+
+function ToolDetails({
+  errorText,
+  input,
+  output,
+}: {
+  errorText?: string;
+  input?: unknown;
+  output?: unknown;
+}) {
+  const contentRef = useRef<HTMLDivElement>(null);
+
+  return (
+    <motion.div
+      animate={{ height: "auto", opacity: 1 }}
+      exit={{ height: 0, opacity: 0 }}
+      initial={{ height: 0, opacity: 0 }}
+      style={{ overflow: "hidden" }}
+      transition={{ duration: 0.2, ease: [0.25, 0.46, 0.45, 0.94] }}
     >
       <div
+        ref={contentRef}
+        style={{
+          borderLeft: "1px solid #222",
+          marginLeft: 3,
+          marginTop: 4,
+          paddingBottom: 4,
+          paddingLeft: 13,
+        }}
+      >
+        {input !== undefined ? (
+          <div style={{ marginBottom: output || errorText ? 8 : 0 }}>
+            <div
+              style={{
+                color: "#555",
+                fontFamily: "var(--font-ibm-plex-mono), monospace",
+                fontSize: 10,
+                letterSpacing: "0.06em",
+                marginBottom: 4,
+                textTransform: "uppercase",
+              }}
+            >
+              Input
+            </div>
+            <ToolCodeBlock code={formatJson(input)} label="Input" />
+          </div>
+        ) : null}
+
+        {output !== undefined ? (
+          <div>
+            <div
+              style={{
+                color: "#555",
+                fontFamily: "var(--font-ibm-plex-mono), monospace",
+                fontSize: 10,
+                letterSpacing: "0.06em",
+                marginBottom: 4,
+                textTransform: "uppercase",
+              }}
+            >
+              Output
+            </div>
+            <div style={{ maxHeight: 200, overflowY: "auto" }}>
+              <ToolCodeBlock
+                code={typeof output === "string" ? output : formatJson(output)}
+                label="Output"
+              />
+            </div>
+          </div>
+        ) : null}
+
+        {errorText ? (
+          <div
+            style={{
+              color: "#fca5a5",
+              fontFamily: "var(--font-ibm-plex-mono), monospace",
+              fontSize: 11,
+              lineHeight: 1.5,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {errorText}
+          </div>
+        ) : null}
+      </div>
+    </motion.div>
+  );
+}
+
+export function ToolProgress({ errorText, input, output, state, toolName }: ToolProgressProps) {
+  const [open, setOpen] = useState(false);
+  const label = TOOL_LABELS[toolName] ?? toolName.replaceAll("_", " ");
+  const indicator = getStatusIndicator(state);
+  const suffix =
+    state === "output-available" ? "" : state === "output-error" ? " failed" : "...";
+  const isInProgress = state !== "output-available" && state !== "output-error";
+  const hasDetails = input !== undefined || output !== undefined || errorText;
+
+  return (
+    <div style={{ marginTop: 2 }}>
+      <button
+        onClick={() => hasDetails && setOpen(!open)}
         style={{
           alignItems: "center",
-          display: "flex",
-          gap: 10,
+          background: "transparent",
+          border: "none",
+          cursor: hasDetails ? "pointer" : "default",
+          display: "inline-flex",
+          gap: 8,
           minWidth: 0,
+          padding: "2px 0",
         }}
+        type="button"
       >
         <span
           style={{
-            color: tone.glyphColor,
-            fontFamily: "var(--font-ibm-plex-mono), monospace",
-            fontSize: 11,
-            letterSpacing: "0.08em",
-            textTransform: "uppercase",
+            animation: isInProgress ? "pulse 1.5s ease-in-out infinite" : "none",
+            color: indicator.color,
+            fontSize: 8,
+            lineHeight: 1,
           }}
         >
-          {tone.glyph}
+          {indicator.symbol}
         </span>
         <span
           style={{
+            color: "#777",
             fontSize: 12,
             letterSpacing: "-0.01em",
             lineHeight: 1.4,
@@ -96,21 +210,25 @@ export function ToolProgress({ errorText, state, toolName }: ToolProgressProps) 
           {label}
           {suffix}
         </span>
-      </div>
+        {hasDetails ? (
+          <span
+            style={{
+              color: "#444",
+              fontSize: 10,
+              transform: open ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 150ms ease",
+            }}
+          >
+            ▾
+          </span>
+        ) : null}
+      </button>
 
-      {errorText ? (
-        <div
-          style={{
-            color: "#fca5a5",
-            fontFamily: "var(--font-ibm-plex-mono), monospace",
-            fontSize: 11,
-            lineHeight: 1.5,
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {errorText}
-        </div>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {open && hasDetails ? (
+          <ToolDetails errorText={errorText} input={input} output={output} />
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }

@@ -43,6 +43,10 @@ function encodeRepoPath(path: string) {
     .join("/");
 }
 
+// GraphQL blame gives per-line authorship (who wrote each line), which is ideal
+// for reviews. But not all tokens have GraphQL access and some repos disable it,
+// so we fall back to the REST commits endpoint which gives recent commit history
+// for the file — less granular but still useful context.
 export const fetchBlame = tool({
   description: "Fetch git blame for a file to understand who changed what and when.",
   inputSchema: z.object({

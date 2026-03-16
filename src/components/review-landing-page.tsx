@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { PromptInputMessage } from "@/components/ai-elements/prompt-input";
 import { Suggestion, Suggestions } from "@/components/ai-elements/suggestion";
 import { ReviewComposer } from "@/components/review-composer";
@@ -54,7 +55,16 @@ export function ReviewLandingPage({
           padding: "16px 24px",
         }}
       >
-        <div style={{ alignItems: "center", display: "flex", gap: 8 }}>
+        <Link
+          href="/"
+          style={{
+            alignItems: "center",
+            color: "inherit",
+            display: "flex",
+            gap: 8,
+            textDecoration: "none",
+          }}
+        >
           <div
             style={{
               background: "#fff",
@@ -73,7 +83,7 @@ export function ReviewLandingPage({
           >
             PR Lens
           </span>
-        </div>
+        </Link>
       </nav>
 
       <main

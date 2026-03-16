@@ -10,6 +10,7 @@ import {
 import { Trash2Icon } from "lucide-react";
 import { motion } from "motion/react";
 import { nanoid } from "nanoid";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   type ReactNode,
@@ -390,7 +391,16 @@ function AppNavigation({ action }: AppNavigationProps) {
         padding: "16px 24px",
       }}
     >
-      <div style={{ alignItems: "center", display: "flex", gap: 8 }}>
+      <Link
+        href="/"
+        style={{
+          alignItems: "center",
+          color: "inherit",
+          display: "flex",
+          gap: 8,
+          textDecoration: "none",
+        }}
+      >
         <div
           style={{
             background: "#fff",
@@ -410,7 +420,7 @@ function AppNavigation({ action }: AppNavigationProps) {
         >
           PR Lens
         </span>
-      </div>
+      </Link>
 
       {action}
     </nav>
@@ -1085,7 +1095,7 @@ export function ChatInterface({
                             PR Lens
                           </span>
                         </div>
-                        <MessageContent className="max-w-full rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] px-6 py-5 text-sm leading-[1.7] text-[#ccc]">
+                        <MessageContent className="w-full rounded-xl border border-[#1a1a1a] bg-[#0a0a0a] px-6 py-5 text-sm leading-[1.7] text-[#ccc]">
                           {message.parts.map((part, index) =>
                             renderAssistantPart(
                               part,

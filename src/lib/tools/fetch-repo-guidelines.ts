@@ -26,6 +26,7 @@ const GUIDELINE_FILES = [
   ".github/pull_request_template.md",
   ".github/PULL_REQUEST_TEMPLATE.md",
 ];
+const MAX_GUIDELINE_CHARS = 3_000;
 
 async function readGuidelineFile(owner: string, repo: string, ref: string, file: string) {
   const response = await githubFetch(
@@ -39,7 +40,7 @@ async function readGuidelineFile(owner: string, repo: string, ref: string, file:
 
   return Buffer.from(data.content.replace(/\n/g, ""), "base64")
     .toString("utf8")
-    .slice(0, 3_000);
+    .slice(0, MAX_GUIDELINE_CHARS);
 }
 
 export const fetchRepoGuidelines = tool({
